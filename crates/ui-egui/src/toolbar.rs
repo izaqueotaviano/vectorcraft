@@ -103,8 +103,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     // Where the panel docks: along the window's left edge, under the bars.
     let edge = ui.available_rect_before_wrap();
     ui.ctx().data_mut(|d| d.insert_temp(crate::floating::tools_zone_id(), egui::Rect::from_min_size(edge.min, vec2(WIDTH, edge.height()))));
-    let frame =
-        egui::Frame::NONE.fill(t.panel).inner_margin(egui::Margin { left: 0, right: 0, top: 0, bottom: 4 }).stroke(Stroke::new(1.5, t.border));
+    let frame = egui::Frame::NONE.fill(t.bar).inner_margin(egui::Margin { left: 0, right: 0, top: 0, bottom: 4 }).stroke(Stroke::new(1.5, t.border));
     match app.ui.toolbar_pos {
         None => {
             egui::Panel::left("toolbar").resizable(false).exact_size(w).frame(frame).show(ui, |ui| body(app, ui, cols, None));
@@ -141,6 +140,8 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, cols: usize, floating: Option<egu
     // The drawer opens beside it; a click in it leaves the drawer open.
     ui.data_mut(|d| d.insert_temp(crate::edit_toolbar::toolbar_id(), bounds));
     ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
+    // The surface the Fill/Stroke proxy's Stroke hole shows (`widgets::proxy_chip`).
+    ui.visuals_mut().panel_fill = t.bar;
     // Title bar with » and a grip strip: a drag on either floats the panel or moves it.
     let (hdr, hresp) = ui.allocate_exact_size(vec2(ui.available_width(), 14.0), Sense::click_and_drag());
     ui.painter().rect_filled(hdr, 0.0, t.tab_strip);
@@ -561,7 +562,7 @@ fn raise_floating(ctx: &egui::Context, key: &str) {
 /// A flyout's frame: drop shadow and border (the accent while it flashes).
 pub(crate) fn flyout_frame(t: &Tokens, flash: bool) -> egui::Frame {
     egui::Frame::NONE
-        .fill(t.panel)
+        .fill(t.bar)
         .stroke(if flash { Stroke::new(1.5, t.accent) } else { Stroke::new(1.0, t.input_border) })
         .shadow(egui::epaint::Shadow { offset: [0, 3], blur: 10, spread: 0, color: Color32::from_black_alpha(90) })
 }

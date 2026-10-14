@@ -50,6 +50,11 @@ fn outlines(shapes: &[egui::Shape], color: egui::Color32) -> Vec<Vec<egui::Pos2>
         .collect()
 }
 
+/// The active artboard's outline colour on the default pasteboard (light on the dark one).
+fn active_edge() -> egui::Color32 {
+    Tokens::for_brightness(Default::default()).artboard_edge(true)
+}
+
 fn app() -> VectorcraftApp {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
@@ -66,7 +71,7 @@ fn the_bleed_draws_as_a_red_outline_around_each_artboard() {
     let found = outlines(&shapes, red);
     assert_eq!(found.len(), 1);
     // The artboard is 200 × 100 pt; the bleed grows it by 40 × 20 pt at the fitted zoom.
-    let ab = outlines(&shapes, egui::Color32::from_gray(0)).into_iter().next().unwrap();
+    let ab = outlines(&shapes, active_edge()).into_iter().next().unwrap();
     let span = |q: &[egui::Pos2]| (q[2].x - q[0].x, q[2].y - q[0].y);
     let ((bw, bh), (aw, ah)) = (span(&found[0]), span(&ab));
     let zoom = aw / 200.0;
@@ -117,7 +122,7 @@ fn an_artboard_name_stays_at_its_corner_in_a_rotated_view() {
     for rotation in [0.0, 60.0, -74.0] {
         app.view_mut().unwrap().rotation = rotation;
         let (shapes, _, _) = frame(&mut app);
-        let corner = outlines(&shapes, egui::Color32::from_gray(0))[0][0];
+        let corner = outlines(&shapes, active_edge())[0][0];
         let mut all = vec![];
         flatten(&shapes, &mut all);
         let label = all

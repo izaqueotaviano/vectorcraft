@@ -237,7 +237,7 @@ fn presets(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
             let (w, h, preset) = (d.f64("width", 0.0), d.f64("height", 0.0), d.str("preset"));
             for s in &list {
                 let selected = d.fields.contains_key(APPLIED) && s.name == preset && s.width == w && s.height == h;
-                let card = preset_card(ui, s, selected);
+                let card = preset_card(ui, s, selected, t.panel_darker, t.hover);
                 if card.clicked() || card.double_clicked() {
                     apply(d, s);
                 }
@@ -260,13 +260,14 @@ pub(crate) fn preset_name(name: &str) -> &str {
 }
 
 /// A preset card: a page-proportioned thumbnail, the name and the size (New Document, the Home
-/// screen). Returns the card's response.
-pub fn preset_card(ui: &mut egui::Ui, s: &DocSettings, selected: bool) -> egui::Response {
+/// screen), filled with `fill`, or with `hover` while hovered or `selected`. Returns the card's
+/// response.
+pub fn preset_card(ui: &mut egui::Ui, s: &DocSettings, selected: bool, fill: egui::Color32, hover: egui::Color32) -> egui::Response {
     let t = Tokens::get(ui.ctx());
     let label = preset_name(&s.name);
     let (r, resp) = ui.allocate_exact_size(egui::vec2(146.0, 150.0), egui::Sense::click());
     let p = ui.painter();
-    p.rect_filled(r, egui::CornerRadius::same(6), if resp.hovered() || selected { t.hover } else { t.panel_darker });
+    p.rect_filled(r, egui::CornerRadius::same(6), if resp.hovered() || selected { hover } else { fill });
     if selected {
         p.rect_stroke(r, egui::CornerRadius::same(6), egui::Stroke::new(2.0, t.accent), egui::StrokeKind::Inside);
     }

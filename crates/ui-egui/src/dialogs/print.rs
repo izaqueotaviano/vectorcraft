@@ -415,7 +415,7 @@ fn page_preview(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, pv:
     let page = egui::Rect::from_center_size(rect.center(), size * fit);
     let to_screen = |x: f64, y: f64| page.min + egui::vec2(x as f32, y as f32) * fit;
     let painter = ui.painter();
-    painter.rect_filled(page.translate(egui::vec2(2.0, 2.0)), 0.0, egui::Color32::from_black_alpha(60));
+    painter.rect_filled(page.translate(egui::vec2(2.0, 2.0)), 0.0, t.page_shadow().0);
     painter.rect_filled(page, 0.0, egui::Color32::WHITE);
     // Dragging moves the art (and its trim box) on the paper; the placement changes on release.
     let tiling = choice::<PrintScaling>(d, "scaling").is_some_and(PrintScaling::tiles);

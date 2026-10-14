@@ -205,12 +205,13 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         let setup = &doc.setup;
         let grid = (st.transparency_grid && setup.background == vectorcraft_doc::Background::Transparent).then(|| checker_texture(ui.ctx(), setup));
         let paper = if setup.simulate_paper { crate::panels::c32(&setup.paper()) } else { Color32::WHITE };
+        let (near, far) = t.page_shadow();
         for ab in &doc.artboards {
             let q = xf.quad(ab.rect);
-            // Hard 2 pt drop shadow, right and bottom (measured: #4d4d4d then #565656 on #606060).
+            // Hard 2 pt drop shadow, right and bottom, deeper on a dark pasteboard.
             let shift = |d: f32| q.iter().map(|p| *p + vec2(d, d)).collect::<Vec<_>>();
-            painter.add(Shape::convex_polygon(shift(2.0), Color32::from_black_alpha(26), Stroke::NONE));
-            painter.add(Shape::convex_polygon(shift(1.0), Color32::from_black_alpha(52), Stroke::NONE));
+            painter.add(Shape::convex_polygon(shift(2.0), far, Stroke::NONE));
+            painter.add(Shape::convex_polygon(shift(1.0), near, Stroke::NONE));
             match &grid {
                 Some((tex, cell)) => checker(&painter, &q, ab.rect, xf.zoom, tex.id(), *cell),
                 None => {
@@ -383,7 +384,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let artboard_tool = app.session.tool_id() == "artboard";
     let tool_labelled = artboard_tool.then(|| app.session.tool_options()["active"].as_u64()).flatten();
     for (i, ab) in doc.artboards.iter().enumerate() {
-        let c = if i == active_ab { Color32::from_gray(0) } else { Color32::from_gray(120) };
+        // Black or grey; on a dark pasteboard the active one is light (`Tokens::artboard_edge`).
+        let c = t.artboard_edge(i == active_ab);
         painter.add(Shape::closed_line(xf.quad(ab.rect), Stroke::new(if i == active_ab { 1.0 } else { 0.6 }, c)));
         // The bleed (Document Setup) as a red outline around the artboard.
         if doc.setup.has_bleed() {
@@ -2023,7 +2025,7 @@ fn draw_overlays(p: &egui::Painter, xf: &Xf, overlays: &[Overlay], t: &Tokens, l
 /// The Home screen (`app.home`; with no document open, unless its preference is off).
 fn home(app: &mut VectorcraftApp, ui: &mut Ui, rect: egui::Rect) {
     let t = Tokens::get(ui.ctx());
-    ui.painter().rect_filled(rect, 0.0, t.panel_darker);
+    ui.painter().rect_filled(rect, 0.0, t.home);
     let inner = rect.shrink2(vec2((rect.width() - 820.0).max(40.0) / 2.0, 60.0));
     let mut child = ui.new_child(egui::UiBuilder::new().max_rect(inner).layout(egui::Layout::top_down(egui::Align::Min)));
     let ui = &mut child;
@@ -2050,7 +2052,7 @@ fn home(app: &mut VectorcraftApp, ui: &mut Ui, rect: egui::Rect) {
         ui.spacing_mut().item_spacing = vec2(14.0, 14.0);
         let cards: Vec<_> = presets.iter().filter_map(|name| vectorcraft_engine::cmd::newdoc::find(&app.session, name)).collect();
         for s in cards {
-            if crate::dialogs::preset_card(ui, &s, false).clicked() {
+            if crate::dialogs::preset_card(ui, &s, false, t.home_card, t.home_card_hover).clicked() {
                 app.run("file.new", json!({ "preset": s.name })).ok();
             }
         }

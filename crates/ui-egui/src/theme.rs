@@ -93,6 +93,16 @@ pub struct Tokens {
     pub axis_x: Color32,
     pub axis_y: Color32,
     pub axis_z: Color32,
+    /// The Control bar and the Tools panel (its flyouts and the All Tools drawer too). The app bar
+    /// is `app_bar`, the panels `panel`.
+    pub bar: Color32,
+    /// The status bar and the hint bar along the bottom of the window.
+    pub status_bar: Color32,
+    /// The Home screen's background.
+    pub home: Color32,
+    /// The Home screen's preset cards, and one under the pointer.
+    pub home_card: Color32,
+    pub home_card_hover: Color32,
 }
 
 impl Tokens {
@@ -140,32 +150,55 @@ impl Tokens {
             axis_x: hex(0xef6058),
             axis_y: hex(0x45af63),
             axis_z: hex(0x378ef0),
+            // Surfaces only the default level sets apart. Here and in the light levels they keep the
+            // colours they had: the panels' for the bars, the darker panels' for the Home screen and
+            // its cards, and the hover colour for a hovered card.
+            bar: hex(0x323232),
+            status_bar: hex(0x323232),
+            home: hex(0x282828),
+            home_card: hex(0x282828),
+            home_card_hover: hex(0x444444),
         };
         match b {
             Brightness::Dark => base,
-            // Measured from Illustrator 2026 (plan/illustrator/10-observed-ui.md §1).
+            // The default level's colours follow a palette the user supplied for the main window
+            // and the Home screen (bars, panels, tab rows, pasteboard, rulers, selected rows,
+            // accents, Home). Where it gives no colour the values are the earlier ones, a few
+            // lifted so that text keeps at least its earlier contrast on the new surfaces: `text`
+            // on a selected row, `text_dim` there and on the panels, `icon`, and the ruler's ticks
+            // and numbers. `divider` is darker so it still shows on the darker panels; inputs keep
+            // #454545, so their text stays above 4.5:1. The canvas around the artboards is dark
+            // now: the artboards' outline and shadow follow it ([`Tokens::artboard_edge`],
+            // [`Tokens::page_shadow`]). Tests: `the_default_level_follows_the_supplied_palette`.
             Brightness::MediumDark => Tokens {
                 app_bar: hex(0x535353),
-                panel: hex(0x535353),
+                bar: hex(0x535353),
+                panel: hex(0x4d4d4d),
+                status_bar: hex(0x4b4b4b),
                 panel_darker: hex(0x424242),
                 tab_strip: hex(0x424242),
                 input: hex(0x454545),
                 input_border: hex(0x5f5f5f),
                 border: hex(0x383838),
-                divider: hex(0x4b4b4b),
-                text: hex(0xd1d1d1),
+                divider: hex(0x3e3e3e),
+                text: hex(0xe0e0e0),
                 text_strong: hex(0xffffff),
-                text_dim: hex(0xb0b0b0),
+                text_dim: hex(0xbababa),
                 text_disabled: hex(0x7a7a7a),
-                icon: hex(0xc2c2c2),
+                icon: hex(0xcccccc),
                 hover: hex(0x606060),
                 tool_active: hex(0x303030),
-                row_selected: hex(0x52677c),
-                pasteboard: hex(0x606060),
-                ruler: hex(0x333333),
-                ruler_tick: hex(0x8a8a8a),
+                row_selected: hex(0x6b6b6b),
+                accent: hex(0x2680eb),
+                accent_strong: hex(0x1273e6),
+                pasteboard: hex(0x282828),
+                ruler: hex(0x474747),
+                ruler_tick: hex(0xb0b0b0),
                 button: hex(0x535353),
                 button_border: hex(0x747474),
+                home: hex(0x1e1e1e),
+                home_card: hex(0x2c2c2c),
+                home_card_hover: hex(0x383838),
                 ..base
             },
             Brightness::MediumLight => Tokens {
@@ -191,6 +224,11 @@ impl Tokens {
                 ruler: hex(0xc2c2c2),
                 ruler_tick: hex(0x4a4a4a),
                 button: hex(0xcacaca),
+                bar: hex(0xb8b8b8),
+                status_bar: hex(0xb8b8b8),
+                home: hex(0xaaaaaa),
+                home_card: hex(0xaaaaaa),
+                home_card_hover: hex(0xc8c8c8),
                 ..base
             },
             Brightness::Light => Tokens {
@@ -216,6 +254,11 @@ impl Tokens {
                 ruler: hex(0xeaeaea),
                 ruler_tick: hex(0x5a5a5a),
                 button: hex(0xe0e0e0),
+                bar: hex(0xf0f0f0),
+                status_bar: hex(0xf0f0f0),
+                home: hex(0xe2e2e2),
+                home_card: hex(0xe2e2e2),
+                home_card_hover: hex(0xdddddd),
                 ..base
             },
         }
@@ -227,6 +270,47 @@ impl Tokens {
     pub fn cr(&self) -> CornerRadius {
         CornerRadius::same(self.radius)
     }
+
+    /// Is the canvas around the artboards so dark that black marks on it vanish (under 3:1)? The
+    /// default level's and Dark's are; the light levels' and the Canvas Color choices are not.
+    pub fn dark_pasteboard(&self) -> bool {
+        contrast(Color32::BLACK, self.pasteboard) < 3.0
+    }
+
+    /// The outline of the active artboard (`active`) or of another one: black and a mid grey on a
+    /// light canvas. On a dark one, where black would vanish, the active artboard's is a light grey.
+    pub fn artboard_edge(&self, active: bool) -> Color32 {
+        match (active, self.dark_pasteboard()) {
+            (true, false) => Color32::BLACK,
+            (true, true) => Color32::from_gray(0xb4),
+            (false, _) => Color32::from_gray(120),
+        }
+    }
+
+    /// The artboards' hard drop shadow, 1 pt and then 2 pt down and to the right: (nearer,
+    /// farther). Deeper on a dark canvas, where the light one would not show.
+    pub fn page_shadow(&self) -> (Color32, Color32) {
+        if self.dark_pasteboard() {
+            (Color32::from_black_alpha(150), Color32::from_black_alpha(80))
+        } else {
+            (Color32::from_black_alpha(52), Color32::from_black_alpha(26))
+        }
+    }
+}
+
+/// The relative luminance of an opaque colour, from 0 (black) to 1 (white), as WCAG defines it.
+pub fn luminance(c: Color32) -> f32 {
+    let linear = |v: u8| {
+        let s = f32::from(v) / 255.0;
+        if s <= 0.04045 { s / 12.92 } else { ((s + 0.055) / 1.055).powf(2.4) }
+    };
+    0.2126 * linear(c.r()) + 0.7152 * linear(c.g()) + 0.0722 * linear(c.b())
+}
+
+/// The WCAG contrast ratio of two opaque colours, from 1 (the same) to 21 (black on white).
+pub fn contrast(a: Color32, b: Color32) -> f32 {
+    let (la, lb) = (luminance(a), luminance(b));
+    (la.max(lb) + 0.05) / (la.min(lb) + 0.05)
 }
 
 /// Selected text in the text fields `ui` draws from here on is in the strong text colour. egui
@@ -360,5 +444,139 @@ mod tests {
             let gap = (i32::from(t.button_border.r()) - i32::from(t.panel.r())).abs();
             assert!(gap >= 24, "{b:?}: rail {:?} on panel {:?}", t.button_border, t.panel);
         }
+    }
+
+    fn rgb(hex: u32) -> Color32 {
+        Color32::from_rgb((hex >> 16) as u8, (hex >> 8) as u8, hex as u8)
+    }
+
+    /// The default level (Medium Dark) takes the palette the user supplied for the main window and
+    /// the Home screen.
+    #[test]
+    fn the_default_level_follows_the_supplied_palette() {
+        let t = Tokens::for_brightness(Brightness::default());
+        assert_eq!(Brightness::default(), Brightness::MediumDark);
+        for (name, got, want) in [
+            ("app bar", t.app_bar, 0x535353),
+            ("Control bar and Tools panel", t.bar, 0x535353),
+            ("panels", t.panel, 0x4d4d4d),
+            ("panel tab rows and document tabs", t.tab_strip, 0x424242),
+            ("pasteboard", t.pasteboard, 0x282828),
+            ("rulers", t.ruler, 0x474747),
+            ("status bar", t.status_bar, 0x4b4b4b),
+            ("selected row", t.row_selected, 0x6b6b6b),
+            ("accent", t.accent, 0x2680eb),
+            ("primary buttons", t.accent_strong, 0x1273e6),
+            ("Home screen", t.home, 0x1e1e1e),
+            ("Home cards", t.home_card, 0x2c2c2c),
+            ("inputs, as before", t.input, 0x454545),
+        ] {
+            assert_eq!(got, rgb(want), "{name}");
+        }
+    }
+
+    /// The palette keeps text readable: white on a primary button and body text on every surface
+    /// at 4.5:1 or more, and nothing below the contrast it had before the palette (the earlier
+    /// values are written out here). A hovered row stays apart from the selected one.
+    #[test]
+    fn the_default_level_keeps_its_text_readable() {
+        let t = Tokens::for_brightness(Brightness::MediumDark);
+        let white = contrast(Color32::WHITE, t.accent_strong);
+        assert!(white >= 4.5, "white on a primary button: {white:.2}");
+        for (name, bg) in [
+            ("panel", t.panel),
+            ("bar", t.bar),
+            ("app bar", t.app_bar),
+            ("status bar", t.status_bar),
+            ("tab row", t.tab_strip),
+            ("input", t.input),
+            ("darker panel", t.panel_darker),
+            ("Home", t.home),
+            ("Home card", t.home_card),
+        ] {
+            let c = contrast(t.text, bg);
+            assert!(c >= 4.5, "text on the {name}: {c:.2}");
+        }
+        // (now, before): text, dim text and icons on a selected row, dim text on the panels and
+        // bars, the ruler's numbers, a divider and an input's border on a panel.
+        for (name, now, before) in [
+            ("text on a selected row", contrast(t.text, t.row_selected), contrast(rgb(0xd1d1d1), rgb(0x52677c))),
+            ("dim text on a selected row", contrast(t.text_dim, t.row_selected), contrast(rgb(0xb0b0b0), rgb(0x52677c))),
+            ("an icon on a selected row", contrast(t.icon, t.row_selected), contrast(rgb(0xc2c2c2), rgb(0x52677c))),
+            ("dim text on a panel", contrast(t.text_dim, t.panel), contrast(rgb(0xb0b0b0), rgb(0x535353))),
+            ("dim text on a bar", contrast(t.text_dim, t.bar), contrast(rgb(0xb0b0b0), rgb(0x535353))),
+            ("dim text on the status bar", contrast(t.text_dim, t.status_bar), contrast(rgb(0xb0b0b0), rgb(0x535353))),
+            ("an icon on a panel", contrast(t.icon, t.panel), contrast(rgb(0xc2c2c2), rgb(0x535353))),
+            ("ruler numbers", contrast(t.ruler_tick, t.ruler), contrast(rgb(0x8a8a8a), rgb(0x333333))),
+            ("a divider on a panel", contrast(t.divider, t.panel), contrast(rgb(0x4b4b4b), rgb(0x535353))),
+            ("an input's border on a panel", contrast(t.input_border, t.panel), contrast(rgb(0x5f5f5f), rgb(0x535353))),
+            ("text in an input", contrast(t.text, t.input), contrast(rgb(0xd1d1d1), rgb(0x454545))),
+        ] {
+            assert!(now >= before, "{name}: {now:.2}, was {before:.2}");
+        }
+        assert_ne!(t.row_selected, t.hover, "a hovered row looks selected");
+        assert!(contrast(t.row_selected, t.hover) >= 1.1, "a hovered row is hard to tell from the selected one");
+        for other in [t.panel, t.bar, t.divider, t.button, t.input] {
+            assert_ne!(t.row_selected, other, "the selected row's fill is its own");
+        }
+    }
+
+    /// Only the default level changes: the surfaces it sets apart keep, in the other levels, the
+    /// colours they had, and the light levels stay light.
+    #[test]
+    fn the_other_levels_keep_their_colours() {
+        for b in [Brightness::Dark, Brightness::MediumLight, Brightness::Light] {
+            let t = Tokens::for_brightness(b);
+            assert_eq!((t.bar, t.status_bar), (t.panel, t.panel), "{b:?}: bars");
+            assert_eq!((t.home, t.home_card, t.home_card_hover), (t.panel_darker, t.panel_darker, t.hover), "{b:?}: Home");
+            assert_eq!((t.accent, t.accent_strong), (rgb(0x378ef0), rgb(0x1473e6)), "{b:?}: accents");
+        }
+        for b in [Brightness::MediumLight, Brightness::Light] {
+            let t = Tokens::for_brightness(b);
+            assert!(!t.dark);
+            for c in [t.bar, t.status_bar, t.panel, t.home, t.home_card, t.home_card_hover, t.pasteboard] {
+                assert!(luminance(c) > 0.3, "{b:?}: {c:?} is dark");
+            }
+        }
+        // Each level's chrome is lighter than the level before it.
+        let levels = Brightness::ALL.map(Tokens::for_brightness);
+        for w in levels.windows(2) {
+            let [a, b] = [&w[0], &w[1]];
+            for (name, x, y) in [
+                ("app bar", a.app_bar, b.app_bar),
+                ("bars", a.bar, b.bar),
+                ("panels", a.panel, b.panel),
+                ("status bar", a.status_bar, b.status_bar),
+                ("tab rows", a.tab_strip, b.tab_strip),
+                ("pasteboard", a.pasteboard, b.pasteboard),
+                ("rulers", a.ruler, b.ruler),
+            ] {
+                assert!(luminance(x) < luminance(y), "{name}: {x:?}, then {y:?}");
+            }
+        }
+    }
+
+    /// On every level's pasteboard, and on the Canvas Color choices, the active artboard's outline
+    /// shows (3:1 or more) and so does its shadow; a light canvas keeps the black outline.
+    #[test]
+    fn artboard_outlines_and_shadows_show_on_every_pasteboard() {
+        let mut canvases: Vec<Tokens> = Brightness::ALL.map(Tokens::for_brightness).to_vec();
+        for grey in [0xff, 0xc8, 0x96, 0x5a] {
+            canvases.push(Tokens { pasteboard: Color32::from_gray(grey), ..Tokens::for_brightness(Brightness::MediumDark) });
+        }
+        for t in canvases {
+            let edge = contrast(t.artboard_edge(true), t.pasteboard);
+            assert!(edge >= 3.0, "outline on {:?}: {edge:.2}", t.pasteboard);
+            assert_eq!(t.artboard_edge(true) == Color32::BLACK, !t.dark_pasteboard());
+            // The nearer shadow over the pasteboard (premultiplied black at that alpha).
+            let a = f32::from(t.page_shadow().0.a()) / 255.0;
+            let p = t.pasteboard;
+            let shaded =
+                Color32::from_rgb((f32::from(p.r()) * (1.0 - a)) as u8, (f32::from(p.g()) * (1.0 - a)) as u8, (f32::from(p.b()) * (1.0 - a)) as u8);
+            let shadow = contrast(shaded, p);
+            assert!(shadow >= 1.15, "shadow on {p:?}: {shadow:.2}");
+        }
+        assert!(Tokens::for_brightness(Brightness::MediumDark).dark_pasteboard());
+        assert!(!Tokens::for_brightness(Brightness::Light).dark_pasteboard());
     }
 }

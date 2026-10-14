@@ -542,8 +542,9 @@ pub fn gradient_chip(ui: &Ui, rect: Rect, gradient: &vectorcraft_color::Gradient
 }
 
 /// A Fill chip of `paint` into `rect` or, with `ring`, a Stroke chip: a frame `ring` wide round a
-/// panel-coloured hole (returned; the whole chip for fills). A selection whose paints differ
-/// (`mixed`) shows a white chip with a "?" (in the hole for strokes).
+/// hole (returned; the whole chip for fills) in the colour of the surface under it, the style's
+/// `panel_fill`: the panels' colour, which the Tools panel and the Control bar set to their own. A
+/// selection whose paints differ (`mixed`) shows a white chip with a "?" (in the hole for strokes).
 pub fn proxy_chip(ui: &Ui, rect: Rect, paint: &Paint, mixed: bool, ring: Option<f32>) -> Rect {
     let t = Tokens::get(ui.ctx());
     if mixed {
@@ -554,7 +555,7 @@ pub fn proxy_chip(ui: &Ui, rect: Rect, paint: &Paint, mixed: bool, ring: Option<
     let (hole, mark) = match ring {
         Some(w) => {
             let inner = rect.shrink(w);
-            ui.painter().rect_filled(inner, 0.0, t.panel);
+            ui.painter().rect_filled(inner, 0.0, ui.visuals().panel_fill);
             (inner, t.text_strong)
         }
         None => (rect, Color32::BLACK),
