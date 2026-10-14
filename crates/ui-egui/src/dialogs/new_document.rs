@@ -1044,14 +1044,17 @@ mod tests {
             let raw =
                 egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1400.0, 1000.0))), ..Default::default() };
             out = ctx.run_ui(raw, |ui| crate::dialogs::show(&mut app, ui.ctx()));
+            out.textures_delta.clear();
         }
         assert_eq!(crate::theme::Tokens::get(&ctx).panel, panel, "the app's tokens are restored");
         let (texts, rects) = shapes(&out);
         assert!(texts.iter().any(|(t, _)| t == "Phone 390×844"), "{texts:?}");
         assert!(texts.iter().any(|(t, _)| t == "390 × 844 px · RGB"), "{texts:?}");
         assert!(texts.iter().any(|(t, _)| t == "Start a new document"));
+        // The window fades in, so the outline's colour is the selection blue at some opacity.
         let selected = crate::theme::Tokens::get(&ctx).sheet_palette().selected;
-        let outlined: Vec<_> = rects.iter().filter(|(_, s)| s.width == 2.0 && s.color == selected).collect();
+        let blue = |c: egui::Color32| c.a() > 0 && c.b() > c.r() && c.b() > c.g() && (selected.b() > selected.r());
+        let outlined: Vec<_> = rects.iter().filter(|(_, s)| s.width == 2.0 && blue(s.color)).collect();
         assert_eq!(outlined.len(), 1, "{outlined:?}");
         let name = texts.iter().find(|(t, _)| t == "Phone 390×844").unwrap().1;
         assert!(outlined[0].0.contains(name.center()), "the outline is around the selected card");
