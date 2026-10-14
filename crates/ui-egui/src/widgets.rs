@@ -96,6 +96,7 @@ pub fn primary_button(ui: &mut Ui, text: &str) -> Response {
     let bg = if resp.hovered() { t.accent } else { t.accent_strong };
     ui.painter().rect_filled(rect, CornerRadius::same(14), bg);
     ui.painter().galley(rect.center() - galley.size() / 2.0, galley, Color32::WHITE);
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), tl!(text)));
     resp
 }
 
@@ -110,6 +111,7 @@ pub fn secondary_button(ui: &mut Ui, text: &str) -> Response {
     }
     ui.painter().rect_stroke(rect, CornerRadius::same(14), Stroke::new(1.5, t.text_dim), StrokeKind::Inside);
     ui.painter().galley(rect.center() - galley.size() / 2.0, galley, t.text);
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), tl!(text)));
     resp
 }
 
@@ -1775,11 +1777,48 @@ pub fn tab_bar(ui: &mut Ui, tabs: &[&str], current: usize) -> Option<usize> {
                     t.accent,
                 );
             }
+            resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, sel, tl!(tab)));
             if resp.clicked() {
                 clicked = Some(i);
             }
         }
     });
+    clicked
+}
+
+/// [`tab_bar`] in a sheet's style (New Document): labels already translated, idle ones in
+/// `idle`, the current one in `active` with a 2 px underline in the same colour, in a row that
+/// scrolls sideways when the labels don't fit. Returns the clicked tab's index.
+pub fn sheet_tab_bar(ui: &mut Ui, tabs: &[&str], current: usize, idle: Color32, active: Color32) -> Option<usize> {
+    let mut clicked = None;
+    egui::ScrollArea::horizontal()
+        .id_salt("sheet-tabs")
+        .auto_shrink([false, true])
+        .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysHidden)
+        .show(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 20.0;
+                for (i, tab) in tabs.iter().enumerate() {
+                    let sel = i == current;
+                    let font = if sel { theme::semibold(13.0) } else { egui::FontId::proportional(13.0) };
+                    let galley = ui.painter().layout_no_wrap(tab.to_string(), font, active);
+                    let (rect, resp) = ui.allocate_exact_size(vec2(galley.size().x, 30.0), Sense::click());
+                    let color = if sel || resp.hovered() { active } else { idle };
+                    ui.painter().galley(pos2(rect.left(), rect.center().y - galley.size().y / 2.0 - 2.0), galley, color);
+                    if sel {
+                        ui.painter().rect_filled(
+                            Rect::from_min_max(pos2(rect.left(), rect.bottom() - 2.0), rect.right_bottom()),
+                            CornerRadius::same(1),
+                            active,
+                        );
+                    }
+                    resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, sel, *tab));
+                    if resp.on_hover_cursor(egui::CursorIcon::PointingHand).clicked() {
+                        clicked = Some(i);
+                    }
+                }
+            });
+        });
     clicked
 }
 

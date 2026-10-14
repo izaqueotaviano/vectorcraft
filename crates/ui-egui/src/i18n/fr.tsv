@@ -4808,3 +4808,8 @@ theme	Appearance	Apparence
 	Softness	Douceur
 	Ambient Light	Lumière ambiante
 	Light behind the object	Lumière derrière l'objet
+# New Document sheet (hero, categories).
+	New Document	Nouveau document
+	Start a new document	Commencer un nouveau document
+	Pick a preset below, or set your own size in Preset Details.	Choisissez un paramètre prédéfini ci-dessous ou indiquez votre propre taille dans Détails du paramètre prédéfini.
+	Web	Web

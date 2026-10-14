@@ -298,6 +298,117 @@ impl Tokens {
     }
 }
 
+/// The surfaces of a sheet-style dialog (New Document): the window and its details column, the
+/// content well, the cards in it, fields, dropdowns, tabs, the selection outline and the call to
+/// action.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Sheet {
+    /// The window and the details column.
+    pub window: Color32,
+    /// The well the preset cards sit in.
+    pub well: Color32,
+    pub card: Color32,
+    pub card_hover: Color32,
+    pub input: Color32,
+    pub dropdown: Color32,
+    /// An idle tab's label, and section labels.
+    pub tab_idle: Color32,
+    /// The active tab's label and its underline.
+    pub tab_active: Color32,
+    /// The selected card's outline.
+    pub selected: Color32,
+    /// The primary (Create) button.
+    pub cta: Color32,
+}
+
+impl Tokens {
+    /// The sheet colours. The dark levels follow a reference palette supplied by the user; the
+    /// light levels derive theirs from their own tokens, so they stay light.
+    pub fn sheet_palette(&self) -> Sheet {
+        let hex = |s: u32| Color32::from_rgb((s >> 16) as u8, (s >> 8) as u8, s as u8);
+        if self.dark {
+            Sheet {
+                window: hex(0x323232),
+                well: hex(0x252525),
+                card: hex(0x2f2f2f),
+                card_hover: hex(0x3a3a3a),
+                input: hex(0x252525),
+                dropdown: hex(0x2f2f2f),
+                tab_idle: hex(0xa5a5a5),
+                tab_active: Color32::WHITE,
+                selected: hex(0x2680eb),
+                cta: hex(0x1273e6),
+            }
+        } else {
+            Sheet {
+                window: self.panel,
+                well: self.panel_darker,
+                card: self.panel,
+                card_hover: self.hover,
+                input: self.input,
+                dropdown: self.button,
+                tab_idle: self.text_dim,
+                tab_active: self.text_strong,
+                selected: self.accent,
+                cta: self.accent_strong,
+            }
+        }
+    }
+
+    /// These tokens with the sheet's surfaces in place of the panel's, for the widgets a sheet
+    /// draws (fields, dropdowns, pills) to pick up its colours.
+    pub fn sheet(self) -> Tokens {
+        let s = self.sheet_palette();
+        Tokens {
+            panel: s.window,
+            panel_darker: s.well,
+            input: s.input,
+            button: s.dropdown,
+            text_dim: s.tab_idle,
+            hover: s.card_hover,
+            accent: s.selected,
+            accent_strong: s.cta,
+            ..self
+        }
+    }
+}
+
+/// Run `f` with `t` as the tokens [`Tokens::get`] returns, then put the previous ones back (also
+/// when `f` unwinds).
+pub fn with_tokens<R>(ctx: &egui::Context, t: Tokens, f: impl FnOnce() -> R) -> R {
+    struct Restore {
+        ctx: egui::Context,
+        old: Option<Tokens>,
+    }
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            let old = self.old.take();
+            self.ctx.data_mut(|d| match old {
+                Some(o) => {
+                    d.insert_temp(egui::Id::NULL, o);
+                }
+                None => {
+                    d.remove::<Tokens>(egui::Id::NULL);
+                }
+            });
+        }
+    }
+    let _restore = Restore { ctx: ctx.clone(), old: ctx.data(|d| d.get_temp::<Tokens>(egui::Id::NULL)) };
+    ctx.data_mut(|d| d.insert_temp(egui::Id::NULL, t));
+    f()
+}
+
+/// egui's own widget colours inside a sheet (`ui` and what it adds): fields in the sheet's input
+/// colour, dropdown buttons in its dropdown colour.
+pub fn sheet_visuals(ui: &mut egui::Ui, s: &Sheet) {
+    let v = ui.visuals_mut();
+    v.extreme_bg_color = s.input;
+    v.widgets.inactive.bg_fill = s.dropdown;
+    v.widgets.inactive.weak_bg_fill = s.dropdown;
+    v.widgets.hovered.bg_fill = s.card_hover;
+    v.widgets.hovered.weak_bg_fill = s.card_hover;
+}
+
 /// The relative luminance of an opaque colour, from 0 (black) to 1 (white), as WCAG defines it.
 pub fn luminance(c: Color32) -> f32 {
     let linear = |v: u8| {
@@ -444,6 +555,48 @@ mod tests {
             let gap = (i32::from(t.button_border.r()) - i32::from(t.panel.r())).abs();
             assert!(gap >= 24, "{b:?}: rail {:?} on panel {:?}", t.button_border, t.panel);
         }
+    }
+
+    /// The sheet (New Document) follows the reference palette in the dark levels, keeps its text
+    /// readable, and stays light in the light levels.
+    #[test]
+    fn the_sheet_follows_the_reference_palette_and_keeps_contrast() {
+        for b in [Brightness::Dark, Brightness::MediumDark] {
+            let s = Tokens::for_brightness(b).sheet_palette();
+            for (name, got, want) in [
+                ("window", s.window, 0x323232),
+                ("well", s.well, 0x252525),
+                ("card", s.card, 0x2f2f2f),
+                ("input", s.input, 0x252525),
+                ("dropdown", s.dropdown, 0x2f2f2f),
+                ("idle tab", s.tab_idle, 0xa5a5a5),
+                ("selected", s.selected, 0x2680eb),
+                ("create", s.cta, 0x1273e6),
+            ] {
+                assert_eq!(got, rgb(want), "{b:?} {name}");
+            }
+            assert!(s.card_hover != s.card && luminance(s.card_hover) > luminance(s.card));
+            assert!(contrast(Color32::WHITE, s.cta) >= 4.5);
+            assert!(contrast(s.tab_idle, s.window) >= 4.5);
+            assert!(contrast(s.selected, s.card) >= 3.0);
+        }
+        for b in [Brightness::MediumLight, Brightness::Light] {
+            let t = Tokens::for_brightness(b);
+            let s = t.sheet_palette();
+            assert_eq!((s.window, s.well, s.input), (t.panel, t.panel_darker, t.input), "{b:?}");
+            assert!(luminance(s.window) > 0.3, "{b:?} stays light");
+        }
+    }
+
+    /// `with_tokens` puts the previous tokens back.
+    #[test]
+    fn with_tokens_restores_the_tokens() {
+        let ctx = egui::Context::default();
+        apply(&ctx, Brightness::MediumDark);
+        let before = Tokens::get(&ctx).panel;
+        let inside = with_tokens(&ctx, Tokens::get(&ctx).sheet(), || Tokens::get(&ctx).panel);
+        assert_eq!(inside, rgb(0x323232));
+        assert_eq!(Tokens::get(&ctx).panel, before);
     }
 
     fn rgb(hex: u32) -> Color32 {

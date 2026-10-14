@@ -4380,3 +4380,13 @@ lighting	Light	Luce
 	Softness	Morbidezza
 	Ambient Light	Luce ambientale
 	Light behind the object	Luce dietro l'oggetto
+# New Document sheet (hero, categories).
+	New Document	Nuovo documento
+	Start a new document	Inizia un nuovo documento
+	Pick a preset below, or set your own size in Preset Details.	Scegli un predefinito qui sotto o imposta una dimensione personalizzata in Dettagli predefinito.
+	Mobile	Dispositivi mobili
+	Web	Web
+	Film & Video	Film e video
+	Art & Illustration	Arte e illustrazione
+	Branding	Branding
+	Social	Social

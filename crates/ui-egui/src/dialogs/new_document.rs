@@ -1,7 +1,8 @@
-//! File → New: category tabs (Recent, Saved and the built-in categories of `file.newPresets`)
-//! over a grid of preset cards, and a Preset Details column (name and Save Preset, size and
-//! units, orientation, artboards, bleed, background contents, Advanced Options, More Settings);
-//! Close and Create. More Settings is the classic form of the same fields (artboard layout,
+//! File → New, a sheet in its own colours ([`Tokens::sheet`]): category tabs (Recent, Saved and
+//! the built-in categories of `file.newPresets`) over a hero card (New from Template…) and a grid
+//! of preset cards with glyphs drawn in code, and a Preset Details column (name and Save Preset,
+//! size and units, orientation, artboards, bleed, colour mode, raster effects, background
+//! contents, Advanced Options (Preview Mode), More Settings); Close and Create. More Settings is the classic form of the same fields (artboard layout,
 //! spacing and columns, profile and size lists), so both share one set of fields and widgets.
 //!
 //! Fields: `file.new`'s params (`preset`, `name`, `width`, `height` (pt), `units`, `artboards`,
@@ -62,6 +63,12 @@ const BACKGROUNDS: [(&str, &str); 2] = [("transparent", "Transparent (Default)")
 const COLOR_MODES: [(&str, &str); 2] = [("rgb", "RGB Color"), ("cmyk", "CMYK Color")];
 /// Width of the Preset Details column.
 const DETAILS: f32 = 292.0;
+/// Width of the presets column (four cards a row).
+const LEFT: f32 = 640.0;
+/// Height of the hero card.
+const HERO: f32 = 112.0;
+/// Size of a preset card.
+const TILE: egui::Vec2 = egui::vec2(146.0, 132.0);
 /// Height of the dialog's content.
 const HEIGHT: f32 = 600.0;
 
@@ -151,9 +158,9 @@ fn set_layout(d: &mut Dialog, key: &str, v: Value) {
     d.fields.insert("artboardLayout".into(), l);
 }
 
-/// The New Document dialog window `id` in the shared modal frame.
-fn window(ctx: &egui::Context, id: &str, margin: i8, add: impl FnOnce(&mut egui::Ui)) {
-    super::modal::show(ctx, id, egui::Id::new(("dialog", id)), -20.0, margin, add);
+/// The New Document dialog window `id` (accessible name `title`) in the shared modal frame.
+fn window(ctx: &egui::Context, id: &str, title: &str, margin: i8, add: impl FnOnce(&mut egui::Ui)) {
+    super::modal::show(ctx, title, egui::Id::new(("dialog", id)), -20.0, margin, add);
 }
 
 /// What the buttons of a window asked for.
@@ -161,11 +168,17 @@ fn window(ctx: &egui::Context, id: &str, margin: i8, add: impl FnOnce(&mut egui:
 struct Buttons {
     create: bool,
     close: bool,
+    /// New from Template…
+    template: bool,
 }
 
 impl Buttons {
     /// Act on the buttons (Enter also creates) once the window is drawn.
     fn finish(self, app: &mut VectorcraftApp, ctx: &egui::Context, d: Dialog) {
+        if self.template {
+            new_from_template(app);
+            return;
+        }
         let create = self.create || ctx.input(|i| i.key_pressed(egui::Key::Enter)) && !ctx.memory(|m| m.focused().is_some());
         app.ui.dialog = Some(d);
         if self.close {
@@ -176,28 +189,54 @@ impl Buttons {
     }
 }
 
+/// New from Template…: close the dialog and open a template instead.
+fn new_from_template(app: &mut VectorcraftApp) {
+    app.ui.dialog = None;
+    if let Err(e) = app.run("file.newFromTemplate", json!({})) {
+        app.status(e);
+    }
+}
+
+/// Run `f` with the sheet's colours (the reference palette supplied by the user in the dark
+/// levels; the light levels' own), putting the app's back afterwards.
+fn sheet<R>(ctx: &egui::Context, f: impl FnOnce() -> R) -> R {
+    theme::with_tokens(ctx, Tokens::get(ctx).sheet(), f)
+}
+
 fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let Some(mut d) = app.ui.dialog.clone() else { return };
     sync(app, &mut d);
-    let t = Tokens::get(ctx);
     let mut b = Buttons::default();
-    window(ctx, KIND, 0, |ui| {
-        // No heading: the top margin (14) and the empty part of the category tabs' row (30) move the
-        // window.
-        super::modal::drag_band(ui, ui.max_rect().top() + 44.0);
-        ui.horizontal_top(|ui| {
-            egui::Frame::NONE.inner_margin(egui::Margin { left: 22, right: 14, top: 14, bottom: 18 }).show(ui, |ui| {
-                ui.vertical(|ui| {
-                    ui.set_width(640.0);
-                    ui.set_min_height(HEIGHT - 32.0);
-                    b.create |= presets(app, ui, &mut d);
-                });
-            });
-            egui::Frame::NONE.fill(t.panel_darker).inner_margin(egui::Margin::same(18)).show(ui, |ui| {
-                ui.vertical(|ui| {
-                    ui.set_width(DETAILS);
-                    ui.set_min_height(HEIGHT);
-                    details(app, ui, &mut d, &mut b);
+    sheet(ctx, || {
+        let t = Tokens::get(ctx);
+        let s = t.sheet_palette();
+        window(ctx, KIND, tl!("New Document"), 0, |ui| {
+            theme::sheet_visuals(ui, &s);
+            // No heading: the top margin (14) and the empty part of the category tabs' row (30) move
+            // the window.
+            super::modal::drag_band(ui, ui.max_rect().top() + 44.0);
+            ui.horizontal_top(|ui| {
+                ui.spacing_mut().item_spacing.x = 0.0;
+                let well = egui::CornerRadius { nw: 6, sw: 6, ne: 0, se: 0 };
+                egui::Frame::NONE.fill(s.well).corner_radius(well).inner_margin(egui::Margin { left: 22, right: 18, top: 14, bottom: 18 }).show(
+                    ui,
+                    |ui| {
+                        ui.vertical(|ui| {
+                            ui.spacing_mut().item_spacing.x = 8.0;
+                            ui.set_width(LEFT);
+                            ui.set_min_height(HEIGHT - 32.0);
+                            presets(app, ui, &mut d, &mut b);
+                        });
+                    },
+                );
+                let side = egui::CornerRadius { nw: 0, sw: 0, ne: 6, se: 6 };
+                egui::Frame::NONE.fill(s.window).corner_radius(side).inner_margin(egui::Margin::same(18)).show(ui, |ui| {
+                    ui.vertical(|ui| {
+                        ui.spacing_mut().item_spacing.x = 6.0;
+                        ui.set_width(DETAILS);
+                        ui.set_min_height(HEIGHT);
+                        details(app, ui, &mut d, &mut b);
+                    });
                 });
             });
         });
@@ -205,17 +244,37 @@ fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     b.finish(app, ctx, d);
 }
 
-/// The category tabs and the chosen category's preset cards: a click chooses one, a double-click
-/// also creates it (true then).
-fn presets(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
-    let t = Tokens::get(ui.ctx());
-    let names: Vec<&str> = newdoc::category_names().collect();
-    let cat = names.iter().position(|n| n.eq_ignore_ascii_case(&d.str("category"))).unwrap_or(0);
-    if let Some(i) = widgets::tab_bar(ui, &names, cat) {
-        d.fields.insert("category".into(), json!(names[i]));
+/// A category's name as shown on its tab.
+fn category_label(name: &str) -> &str {
+    match name {
+        "Recent" => tl!("Recent"),
+        "Saved" => tl!("Saved"),
+        "Mobile" => tl!("Mobile"),
+        "Web" => tl!("Web"),
+        "Print" => tl!("Print"),
+        "Film & Video" => tl!("Film & Video"),
+        "Art & Illustration" => tl!("Art & Illustration"),
+        "Branding" => tl!("Branding"),
+        "Social" => tl!("Social"),
+        other => tl!(other),
     }
-    let list = names.get(cat).and_then(|c| newdoc::category(&app.session, c)).unwrap_or_default();
+}
+
+/// The category tabs, the hero card and the chosen category's preset cards: a click chooses one,
+/// a double-click also creates it.
+fn presets(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, b: &mut Buttons) {
+    let t = Tokens::get(ui.ctx());
+    let s = t.sheet_palette();
+    let names: Vec<&str> = newdoc::category_names().collect();
+    let labels: Vec<&str> = names.iter().map(|n| category_label(n)).collect();
+    let cat = names.iter().position(|n| n.eq_ignore_ascii_case(&d.str("category"))).unwrap_or(0);
+    if let Some(n) = widgets::sheet_tab_bar(ui, &labels, cat, s.tab_idle, s.tab_active).and_then(|i| names.get(i)) {
+        d.fields.insert("category".into(), json!(n));
+    }
     ui.add_space(14.0);
+    b.template |= hero(ui, &s);
+    ui.add_space(16.0);
+    let list = names.get(cat).and_then(|c| newdoc::category(&app.session, c)).unwrap_or_default();
     let heading = if cat == 0 {
         tl!("RECENT")
     } else if cat == 1 {
@@ -223,29 +282,75 @@ fn presets(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     } else {
         tl!("BLANK DOCUMENT PRESETS")
     };
-    ui.label(egui::RichText::new(format!("{heading} ({})", list.len())).font(theme::semibold(11.0)).color(t.text_dim));
+    ui.label(egui::RichText::new(format!("{heading} ({})", list.len())).font(theme::semibold(11.0)).color(s.tab_idle));
     ui.add_space(10.0);
     if list.is_empty() {
         let hint = if cat == 1 { tl!("Presets you save with the Save Preset button appear here.") } else { tl!("Documents you create appear here.") };
-        ui.label(egui::RichText::new(hint).color(t.text_dim));
-        return false;
+        ui.label(egui::RichText::new(hint).color(s.tab_idle));
+        return;
     }
-    let mut create = false;
-    egui::ScrollArea::vertical().id_salt(("newdoc-presets", cat)).max_height(HEIGHT - 110.0).auto_shrink([false, false]).show(ui, |ui| {
+    egui::ScrollArea::vertical().id_salt(("newdoc-presets", cat)).max_height(HEIGHT - 240.0).auto_shrink([false, false]).show(ui, |ui| {
         ui.horizontal_wrapped(|ui| {
             ui.spacing_mut().item_spacing = egui::vec2(12.0, 12.0);
             let (w, h, preset) = (d.f64("width", 0.0), d.f64("height", 0.0), d.str("preset"));
-            for s in &list {
-                let selected = d.fields.contains_key(APPLIED) && s.name == preset && s.width == w && s.height == h;
-                let card = preset_card(ui, s, selected, t.panel_darker, t.hover);
+            for p in &list {
+                let selected = d.fields.contains_key(APPLIED) && p.name == preset && p.width == w && p.height == h;
+                let card = preset_tile(ui, p, selected, &s);
                 if card.clicked() || card.double_clicked() {
-                    apply(d, s);
+                    apply(d, p);
                 }
-                create |= card.double_clicked();
+                b.create |= card.double_clicked();
             }
         });
     });
-    create
+}
+
+/// The hero card at the top of the well: our heading and hint, a New from Template… link and an
+/// illustration drawn in code. Whether the link was clicked.
+fn hero(ui: &mut egui::Ui, s: &theme::Sheet) -> bool {
+    let t = Tokens::get(ui.ctx());
+    let (r, _) = ui.allocate_exact_size(egui::vec2(LEFT, HERO), egui::Sense::hover());
+    ui.painter().rect_filled(r, egui::CornerRadius::same(8), s.card);
+    let art = egui::Rect::from_center_size(egui::pos2(r.right() - 96.0, r.center().y), egui::vec2(150.0, 84.0));
+    paint_hero_art(ui.painter(), art, &t, s);
+    let text = egui::Rect::from_min_max(r.min + egui::vec2(20.0, 16.0), egui::pos2(art.left() - 16.0, r.bottom() - 12.0));
+    let mut link = false;
+    ui.scope_builder(egui::UiBuilder::new().max_rect(text).layout(egui::Layout::top_down(egui::Align::Min)), |ui| {
+        ui.spacing_mut().item_spacing.y = 6.0;
+        ui.add(egui::Label::new(egui::RichText::new(tl!("Start a new document")).font(theme::semibold(16.0)).color(s.tab_active)).selectable(false));
+        ui.add(
+            egui::Label::new(egui::RichText::new(tl!("Pick a preset below, or set your own size in Preset Details.")).size(12.5).color(s.tab_idle))
+                .wrap()
+                .selectable(false),
+        );
+        let l = ui.add(egui::Link::new(egui::RichText::new(tl!("New from Template…")).size(12.5).color(s.selected)));
+        link = l.clicked();
+    });
+    link
+}
+
+/// The hero's illustration: two offset artboards, a curve across them with its anchors and
+/// handles.
+fn paint_hero_art(p: &egui::Painter, r: egui::Rect, t: &Tokens, s: &theme::Sheet) {
+    let back = egui::Rect::from_min_size(r.min + egui::vec2(10.0, 0.0), egui::vec2(78.0, 62.0));
+    let front = egui::Rect::from_min_size(r.min + egui::vec2(56.0, 18.0), egui::vec2(88.0, 64.0));
+    for a in [back, front] {
+        p.rect_filled(a.translate(egui::vec2(2.0, 3.0)), 3.0, egui::Color32::from_black_alpha(70));
+        p.rect_filled(a, 3.0, s.well);
+        p.rect_stroke(a, 3.0, egui::Stroke::new(1.0, t.icon.gamma_multiply(0.6)), egui::StrokeKind::Inside);
+    }
+    let (a, b) = (egui::pos2(back.left() + 12.0, back.bottom() - 14.0), egui::pos2(front.right() - 12.0, front.top() + 16.0));
+    let (c1, c2) = (a + egui::vec2(28.0, -46.0), b + egui::vec2(-30.0, 48.0));
+    let stroke = egui::Stroke::new(2.0, s.selected);
+    p.add(egui::epaint::CubicBezierShape::from_points_stroke([a, c1, c2, b], false, egui::Color32::TRANSPARENT, stroke));
+    let handle = egui::Stroke::new(1.0, t.icon);
+    for (anchor, control) in [(a, c1), (b, c2)] {
+        p.line_segment([anchor, control], handle);
+        p.circle_filled(control, 2.5, t.icon);
+        let sq = egui::Rect::from_center_size(anchor, egui::vec2(6.0, 6.0));
+        p.rect_filled(sq, 0.0, s.tab_active);
+        p.rect_stroke(sq, 0.0, egui::Stroke::new(1.0, s.selected), egui::StrokeKind::Inside);
+    }
 }
 
 /// Is `name` a built-in preset's? Those are ours (translated); Recent and Saved hold the names of
@@ -259,9 +364,182 @@ pub(crate) fn preset_name(name: &str) -> &str {
     if is_builtin_preset(name) { tl!(name) } else { name }
 }
 
-/// A preset card: a page-proportioned thumbnail, the name and the size (New Document, the Home
-/// screen), filled with `fill`, or with `hover` while hovered or `selected`. Returns the card's
-/// response.
+/// The glyph a preset card shows for its kind of document.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Glyph {
+    Page,
+    Phone,
+    Tablet,
+    Watch,
+    Browser,
+    Film,
+    Art,
+    Card,
+    Post,
+}
+
+/// The glyph for a preset: its built-in category's, else a screen for pixel sizes and a page for
+/// the others.
+fn glyph_of(s: &DocSettings) -> Glyph {
+    let category = newdoc::CATEGORIES.iter().find(|(_, _, _, presets)| presets.iter().any(|(n, ..)| *n == s.name)).map(|c| c.0);
+    match category {
+        Some("Mobile") if s.name.starts_with("Tablet") => Glyph::Tablet,
+        Some("Mobile") if s.name.starts_with("Watch") => Glyph::Watch,
+        Some("Mobile") => Glyph::Phone,
+        Some("Web") => Glyph::Browser,
+        Some("Film & Video") => Glyph::Film,
+        Some("Art & Illustration") => Glyph::Art,
+        Some("Branding") => Glyph::Card,
+        Some("Social") => Glyph::Post,
+        Some(_) => Glyph::Page,
+        None if s.units == Unit::Pixels => Glyph::Browser,
+        None => Glyph::Page,
+    }
+}
+
+/// Draw `g` in the square `r` with outlines in `c` and details in `accent`.
+fn paint_glyph(p: &egui::Painter, r: egui::Rect, g: Glyph, c: egui::Color32, accent: egui::Color32) {
+    let line = egui::Stroke::new(1.5, c);
+    let thin = egui::Stroke::new(1.0, c);
+    let at = |w: f32, h: f32| egui::Rect::from_center_size(r.center(), egui::vec2(w, h));
+    match g {
+        Glyph::Page => {
+            let page = at(26.0, 34.0);
+            let fold = 8.0;
+            let outline = vec![
+                page.left_top(),
+                page.right_top() - egui::vec2(fold, 0.0),
+                page.right_top() + egui::vec2(0.0, fold),
+                page.right_bottom(),
+                page.left_bottom(),
+                page.left_top(),
+            ];
+            p.add(egui::Shape::line(outline, line));
+            p.add(egui::Shape::line(
+                vec![page.right_top() - egui::vec2(fold, 0.0), page.right_top() + egui::vec2(-fold, fold), page.right_top() + egui::vec2(0.0, fold)],
+                thin,
+            ));
+        }
+        Glyph::Phone => {
+            let b = at(20.0, 36.0);
+            p.rect_stroke(b, 4.0, line, egui::StrokeKind::Middle);
+            p.line_segment([egui::pos2(b.center().x - 3.0, b.top() + 4.0), egui::pos2(b.center().x + 3.0, b.top() + 4.0)], thin);
+        }
+        Glyph::Tablet => {
+            let b = at(28.0, 36.0);
+            p.rect_stroke(b, 3.0, line, egui::StrokeKind::Middle);
+            p.circle_filled(egui::pos2(b.center().x, b.bottom() - 4.0), 1.5, c);
+        }
+        Glyph::Watch => {
+            let b = at(20.0, 22.0);
+            p.rect_stroke(b, 5.0, line, egui::StrokeKind::Middle);
+            for (y0, y1) in [(b.top(), b.top() - 7.0), (b.bottom(), b.bottom() + 7.0)] {
+                p.rect_stroke(
+                    egui::Rect::from_x_y_ranges(b.left() + 4.0..=b.right() - 4.0, y0.min(y1)..=y0.max(y1)),
+                    1.0,
+                    thin,
+                    egui::StrokeKind::Middle,
+                );
+            }
+        }
+        Glyph::Browser => {
+            let b = at(38.0, 28.0);
+            p.rect_stroke(b, 3.0, line, egui::StrokeKind::Middle);
+            p.line_segment([egui::pos2(b.left(), b.top() + 7.0), egui::pos2(b.right(), b.top() + 7.0)], thin);
+            for i in 0..3 {
+                p.circle_filled(egui::pos2(b.left() + 4.5 + i as f32 * 4.0, b.top() + 3.5), 1.2, c);
+            }
+        }
+        Glyph::Film => {
+            let b = at(40.0, 24.0);
+            p.rect_stroke(b, 2.0, line, egui::StrokeKind::Middle);
+            for i in 0..5 {
+                let x = b.left() + 6.0 + i as f32 * 7.0;
+                p.line_segment([egui::pos2(x, b.top() + 2.0), egui::pos2(x + 3.0, b.top() + 2.0)], thin);
+                p.line_segment([egui::pos2(x, b.bottom() - 2.0), egui::pos2(x + 3.0, b.bottom() - 2.0)], thin);
+            }
+            let m = b.center();
+            p.add(egui::Shape::convex_polygon(
+                vec![m + egui::vec2(-4.0, -5.0), m + egui::vec2(6.0, 0.0), m + egui::vec2(-4.0, 5.0)],
+                accent,
+                egui::Stroke::NONE,
+            ));
+        }
+        Glyph::Art => {
+            let b = at(34.0, 30.0);
+            p.rect_stroke(b, 2.0, line, egui::StrokeKind::Middle);
+            let (a, e) = (b.left_bottom() + egui::vec2(6.0, -7.0), b.right_top() + egui::vec2(-6.0, 9.0));
+            let (c1, c2) = (a + egui::vec2(6.0, -16.0), e + egui::vec2(-8.0, 14.0));
+            p.add(egui::epaint::CubicBezierShape::from_points_stroke(
+                [a, c1, c2, e],
+                false,
+                egui::Color32::TRANSPARENT,
+                egui::Stroke::new(1.5, accent),
+            ));
+            p.line_segment([a, c1], thin);
+            p.circle_filled(c1, 1.5, c);
+            for q in [a, e] {
+                p.rect_filled(egui::Rect::from_center_size(q, egui::vec2(4.0, 4.0)), 0.0, c);
+            }
+        }
+        Glyph::Card => {
+            let b = at(40.0, 24.0);
+            p.rect_stroke(b, 2.0, line, egui::StrokeKind::Middle);
+            p.circle_stroke(egui::pos2(b.left() + 9.0, b.center().y), 4.5, egui::Stroke::new(1.5, accent));
+            for (dy, w) in [(-4.0, 16.0), (0.0, 12.0), (4.0, 14.0)] {
+                let x = b.left() + 18.0;
+                p.line_segment([egui::pos2(x, b.center().y + dy), egui::pos2(x + w, b.center().y + dy)], thin);
+            }
+        }
+        Glyph::Post => {
+            let b = at(30.0, 26.0).translate(egui::vec2(0.0, -3.0));
+            p.rect_stroke(b, 3.0, line, egui::StrokeKind::Middle);
+            let tail =
+                vec![egui::pos2(b.left() + 7.0, b.bottom()), egui::pos2(b.left() + 7.0, b.bottom() + 7.0), egui::pos2(b.left() + 14.0, b.bottom())];
+            p.add(egui::Shape::line(tail, line));
+            p.circle_filled(b.center(), 3.0, accent);
+        }
+    }
+}
+
+/// The colour mode a card names.
+fn mode_label(s: &DocSettings) -> &'static str {
+    if newdoc::color_mode_id(s.color_mode) == "cmyk" { "CMYK" } else { "RGB" }
+}
+
+/// A New Document preset card: the glyph of its kind, the name and "size · colour mode", with
+/// an outline while `selected`. Returns the card's response.
+fn preset_tile(ui: &mut egui::Ui, s: &DocSettings, selected: bool, sheet: &theme::Sheet) -> egui::Response {
+    let t = Tokens::get(ui.ctx());
+    let label = preset_name(&s.name);
+    let detail = format!("{} · {}", s.size_label(), mode_label(s));
+    let (r, resp) = ui.allocate_exact_size(egui::vec2(TILE.x, TILE.y), egui::Sense::click());
+    let p = ui.painter();
+    p.rect_filled(r, egui::CornerRadius::same(6), if resp.hovered() || selected { sheet.card_hover } else { sheet.card });
+    if selected {
+        p.rect_stroke(r, egui::CornerRadius::same(6), egui::Stroke::new(2.0, sheet.selected), egui::StrokeKind::Inside);
+    } else if resp.has_focus() {
+        p.rect_stroke(r, egui::CornerRadius::same(6), egui::Stroke::new(1.0, sheet.selected), egui::StrokeKind::Inside);
+    }
+    let glyph = egui::Rect::from_center_size(r.center_top() + egui::vec2(0.0, 38.0), egui::vec2(44.0, 44.0));
+    paint_glyph(p, glyph, glyph_of(s), t.icon, sheet.selected);
+    // The name on up to two lines, then the size and colour mode.
+    let mut job = egui::text::LayoutJob::single_section(
+        label.to_string(),
+        egui::TextFormat { font_id: theme::semibold(11.5), color: t.text_strong, ..Default::default() },
+    );
+    job.halign = egui::Align::Center;
+    job.wrap = egui::text::TextWrapping { max_width: r.width() - 14.0, max_rows: 2, break_anywhere: false, overflow_character: Some('…') };
+    let name = ui.fonts_mut(|f| f.layout_job(job));
+    let name_h = name.size().y;
+    p.galley(egui::pos2(r.center().x, r.top() + 74.0), name, t.text_strong);
+    p.text(egui::pos2(r.center().x, r.top() + 78.0 + name_h), egui::Align2::CENTER_TOP, &detail, egui::FontId::proportional(11.0), sheet.tab_idle);
+    resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, selected, format!("{label}, {}", s.size_label())));
+    resp.on_hover_text(label)
+}
+
+/// A preset card: a page-proportioned thumbnail, the name and the size (the Home screen), filled
+/// with `fill`, or with `hover` while hovered or `selected`. Returns the card's response.
 pub fn preset_card(ui: &mut egui::Ui, s: &DocSettings, selected: bool, fill: egui::Color32, hover: egui::Color32) -> egui::Response {
     let t = Tokens::get(ui.ctx());
     let label = preset_name(&s.name);
@@ -325,28 +603,33 @@ fn details(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, b: &mut 
     ui.horizontal_top(|ui| {
         ui.vertical(|ui| {
             form::caption(ui, tl!("Height"));
-            form::length(ui, d, "height", unit, 104.0);
+            form::length(ui, d, "height", unit, DETAILS - 124.0);
         });
         ui.add_space(6.0);
         ui.vertical(|ui| {
             form::caption(ui, tl!("Orientation"));
             orientation(ui, d);
         });
-        ui.add_space(6.0);
-        ui.vertical(|ui| {
-            form::caption(ui, tl!("Artboards"));
-            artboards(ui, d, 76.0);
-        });
     });
-    ui.add_space(8.0);
+    ui.add_space(6.0);
+    form::caption(ui, tl!("Artboards"));
+    artboards(ui, d, 96.0);
+    ui.add_space(6.0);
     form::caption(ui, tl!("Bleed"));
     form::bleed(ui, d, unit, 52.0);
-    ui.add_space(8.0);
+    ui.add_space(6.0);
+    let (colors, ppi, _) = advanced_options();
+    form::caption(ui, tl!("Color Mode"));
+    choice(ui, d, "colorMode", &colors, DETAILS);
+    ui.add_space(6.0);
+    form::caption(ui, tl!("Raster Effects"));
+    choice(ui, d, "rasterEffectsPpi", &ppi, DETAILS);
+    ui.add_space(6.0);
     form::caption(ui, tl!("Background Contents"));
     background(ui, d, DETAILS - 34.0);
     ui.add_space(8.0);
-    advanced(ui, d, 110.0, DETAILS - 116.0);
-    ui.add_space(12.0);
+    advanced(ui, d, 110.0, DETAILS - 116.0, &["previewMode"]);
+    ui.add_space(10.0);
     if widgets::flat_button(ui, tl!("More Settings"), DETAILS).clicked() {
         d.kind = MORE.into();
     }
@@ -447,8 +730,19 @@ fn choice(ui: &mut egui::Ui, d: &mut Dialog, key: &str, options: &[(Value, Strin
     }
 }
 
-/// The collapsible Advanced Options: Color Mode, Raster Effects and Preview Mode.
-fn advanced(ui: &mut egui::Ui, d: &mut Dialog, label: f32, field: f32) {
+/// The options of Color Mode, Raster Effects and Preview Mode as (value, label).
+type Options = Vec<(Value, String)>;
+
+fn advanced_options() -> (Options, Options, Options) {
+    let colors = COLOR_MODES.iter().map(|(v, l)| (json!(v), l.to_string())).collect();
+    let ppi = RASTER_PPI.iter().map(|(v, l)| (json!(v), l.to_string())).collect();
+    let previews = PreviewMode::ALL.iter().map(|m| (json!(m.id()), form::humanize(m.id()).trim_end_matches(':').to_string())).collect();
+    (colors, ppi, previews)
+}
+
+/// The collapsible Advanced Options (open while the `advanced` field is), holding the fields
+/// `keys` of Color Mode, Raster Effects and Preview Mode.
+fn advanced(ui: &mut egui::Ui, d: &mut Dialog, label: f32, field: f32, keys: &[&str]) {
     let open = d.bool("advanced");
     if widgets::section_toggle(ui, tl!("Advanced Options"), open) {
         d.fields.insert("advanced".into(), json!(!open));
@@ -456,16 +750,15 @@ fn advanced(ui: &mut egui::Ui, d: &mut Dialog, label: f32, field: f32) {
     if !open {
         return;
     }
-    let colors: Vec<(Value, String)> = COLOR_MODES.iter().map(|(v, l)| (json!(v), l.to_string())).collect();
-    let ppi: Vec<(Value, String)> = RASTER_PPI.iter().map(|(v, l)| (json!(v), l.to_string())).collect();
-    let previews: Vec<(Value, String)> =
-        PreviewMode::ALL.iter().map(|m| (json!(m.id()), form::humanize(m.id()).trim_end_matches(':').to_string())).collect();
+    let (colors, ppi, previews) = advanced_options();
     for (key, name, options) in [
         ("colorMode", tl!("Color Mode"), &colors),
         ("rasterEffectsPpi", tl!("Raster Effects"), &ppi),
         ("previewMode", tl!("Preview Mode"), &previews),
     ] {
-        widgets::label_row(ui, name, label, |ui| choice(ui, d, key, options, field));
+        if keys.contains(&key) {
+            widgets::label_row(ui, name, label, |ui| choice(ui, d, key, options, field));
+        }
     }
 }
 
@@ -475,9 +768,8 @@ fn show_more(app: &mut VectorcraftApp, ctx: &egui::Context) {
     sync(app, &mut d);
     let t = Tokens::get(ctx);
     let mut b = Buttons::default();
-    let mut templates = false;
     const L: f32 = 150.0;
-    window(ctx, MORE, 22, |ui| {
+    window(ctx, MORE, tl!("More Settings"), 22, |ui| {
         ui.set_width(560.0);
         super::modal::heading(ui, tl!("More Settings"));
         ui.add_space(12.0);
@@ -561,10 +853,10 @@ fn show_more(app: &mut VectorcraftApp, ctx: &egui::Context) {
         ui.add_space(4.0);
         widgets::label_row(ui, tl!("Background Contents:"), L, |ui| background(ui, &mut d, 220.0));
         ui.add_space(8.0);
-        advanced(ui, &mut d, L, 220.0);
+        advanced(ui, &mut d, L, 220.0, &["colorMode", "rasterEffectsPpi", "previewMode"]);
         ui.add_space(16.0);
         ui.horizontal(|ui| {
-            templates = widgets::secondary_button(ui, tl!("Templates…")).on_hover_text(tl!("New from Template")).clicked();
+            b.template = widgets::secondary_button(ui, tl!("Templates…")).on_hover_text(tl!("New from Template")).clicked();
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 b.create |= widgets::primary_button(ui, tl!("Create Document")).clicked();
                 ui.add_space(8.0);
@@ -575,13 +867,6 @@ fn show_more(app: &mut VectorcraftApp, ctx: &egui::Context) {
             });
         });
     });
-    if templates {
-        app.ui.dialog = None;
-        if let Err(e) = app.run("file.newFromTemplate", json!({})) {
-            app.status(e);
-        }
-        return;
-    }
     b.finish(app, ctx, d);
 }
 
@@ -722,5 +1007,169 @@ mod tests {
         assert!((field(&app, "width").as_f64().unwrap() - 148.0 * 72.0 / 25.4).abs() < 1e-6, "A5 wide");
         crate::dialogs::confirm(&mut app).unwrap();
         assert_eq!(app.session.prefs.recent_new_docs[0].name, "Zine");
+    }
+
+    /// Every text and every outlined rectangle a frame paints.
+    type Painted = (Vec<(String, egui::Rect)>, Vec<(egui::Rect, egui::Stroke)>);
+
+    fn shapes(out: &egui::FullOutput) -> Painted {
+        fn walk(s: &egui::Shape, texts: &mut Vec<(String, egui::Rect)>, rects: &mut Vec<(egui::Rect, egui::Stroke)>) {
+            match s {
+                egui::Shape::Text(t) => texts.push((t.galley.text().to_string(), t.visual_bounding_rect())),
+                egui::Shape::Rect(r) => rects.push((r.rect, r.stroke)),
+                egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, texts, rects)),
+                _ => {}
+            }
+        }
+        let (mut texts, mut rects) = (vec![], vec![]);
+        out.shapes.iter().for_each(|c| walk(&c.shape, &mut texts, &mut rects));
+        (texts, rects)
+    }
+
+    /// Cards show their name and "size · colour mode"; exactly one, the selected one, has the
+    /// 2 px selection outline; the app's tokens are back after the dialog draws.
+    #[test]
+    fn cards_show_size_and_mode_and_one_is_outlined() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.newDialog", json!({})).unwrap();
+        set(&mut app, "category", json!("Mobile"));
+        set(&mut app, "preset", json!("Phone 390×844"));
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        crate::theme::apply(&ctx, Default::default());
+        let panel = crate::theme::Tokens::get(&ctx).panel;
+        let mut out = egui::FullOutput::default();
+        for _ in 0..2 {
+            let raw =
+                egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1400.0, 1000.0))), ..Default::default() };
+            out = ctx.run_ui(raw, |ui| crate::dialogs::show(&mut app, ui.ctx()));
+        }
+        assert_eq!(crate::theme::Tokens::get(&ctx).panel, panel, "the app's tokens are restored");
+        let (texts, rects) = shapes(&out);
+        assert!(texts.iter().any(|(t, _)| t == "Phone 390×844"), "{texts:?}");
+        assert!(texts.iter().any(|(t, _)| t == "390 × 844 px · RGB"), "{texts:?}");
+        assert!(texts.iter().any(|(t, _)| t == "Start a new document"));
+        let selected = crate::theme::Tokens::get(&ctx).sheet_palette().selected;
+        let outlined: Vec<_> = rects.iter().filter(|(_, s)| s.width == 2.0 && s.color == selected).collect();
+        assert_eq!(outlined.len(), 1, "{outlined:?}");
+        let name = texts.iter().find(|(t, _)| t == "Phone 390×844").unwrap().1;
+        assert!(outlined[0].0.contains(name.center()), "the outline is around the selected card");
+        // A print preset is CMYK.
+        set(&mut app, "category", json!("Print"));
+        let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1400.0, 1000.0))), ..Default::default() };
+        let out = ctx.run_ui(raw, |ui| crate::dialogs::show(&mut app, ui.ctx()));
+        assert!(shapes(&out).0.iter().any(|(t, _)| t.ends_with("· CMYK")));
+    }
+
+    /// The glyphs follow the category, and a preset of the user's gets a screen or a page.
+    #[test]
+    fn glyphs_follow_the_category() {
+        use super::Glyph;
+        let named = |n: &str| vectorcraft_engine::cmd::newdoc::DocSettings { name: n.into(), ..Default::default() };
+        assert_eq!(super::glyph_of(&named("Phone 393×852")), Glyph::Phone);
+        assert_eq!(super::glyph_of(&named("Tablet 768×1024")), Glyph::Tablet);
+        assert_eq!(super::glyph_of(&named("Watch 184×224")), Glyph::Watch);
+        assert_eq!(super::glyph_of(&named("Letter")), Glyph::Page);
+        let mut mine = named("Mine");
+        mine.units = vectorcraft_doc::Unit::Pixels;
+        assert_eq!(super::glyph_of(&mine), Glyph::Browser);
+        mine.units = vectorcraft_doc::Unit::Millimeters;
+        assert_eq!(super::glyph_of(&mine), Glyph::Page);
+    }
+
+    fn harness(app: VectorcraftApp) -> egui_kittest::Harness<'static, VectorcraftApp> {
+        let mut ready = false;
+        let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(1400.0, 1000.0)).build_ui_state(
+            move |ui, app: &mut VectorcraftApp| {
+                if !ready {
+                    crate::theme::install_fonts(ui.ctx());
+                    crate::theme::apply(ui.ctx(), Default::default());
+                    ready = true;
+                    return;
+                }
+                crate::dialogs::show(app, ui.ctx());
+            },
+            app,
+        );
+        h.run_steps(3);
+        h
+    }
+
+    /// The tabs and cards say which is selected; Close and Create are buttons by name, and Create
+    /// makes the document.
+    #[test]
+    fn the_dialog_is_accessible_and_create_creates() {
+        use egui_kittest::kittest::{NodeT, Queryable};
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.newDialog", json!({})).unwrap();
+        set(&mut app, "category", json!("Mobile"));
+        set(&mut app, "preset", json!("Phone 393×852"));
+        let mut h = harness(app);
+        let toggled = |n: &egui_kittest::Node<'_>| n.accesskit_node().toggled() == Some(egui::accesskit::Toggled::True);
+        assert!(toggled(&h.get_by_label("Mobile")));
+        assert!(!toggled(&h.get_by_label("Web")));
+        assert!(toggled(&h.get_by_label("Phone 393×852, 393 × 852 px")));
+        assert!(!toggled(&h.get_by_label("Phone 390×844, 390 × 844 px")));
+        let _ = h.get_by_label("Close");
+        h.get_by_label("Create").click();
+        h.run_steps(2);
+        assert!(h.state().ui.dialog.is_none(), "{}", h.state().ui.status);
+        assert_eq!(h.state().session.documents().len(), 1);
+    }
+
+    /// Enter with no field focused creates the document.
+    #[test]
+    fn enter_creates_the_document() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.newDialog", json!({})).unwrap();
+        let mut h = harness(app);
+        h.key_press(egui::Key::Enter);
+        h.run_steps(2);
+        assert!(h.state().ui.dialog.is_none());
+        assert_eq!(h.state().session.documents().len(), 1);
+    }
+
+    /// The hero's New from Template… link leaves the dialog for the template picker.
+    #[test]
+    fn the_hero_link_opens_a_template_instead() {
+        use egui_kittest::kittest::Queryable;
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.newDialog", json!({})).unwrap();
+        let mut h = harness(app);
+        h.get_by_label("New from Template…").click();
+        h.run_steps(2);
+        assert!(h.state().ui.dialog.is_none());
+        assert!(h.state().session.documents().is_empty(), "no picker here: nothing opened");
+    }
+
+    /// Images of the dialog in every brightness, for looking at (set CRAFT_UI_VISUAL_FIXTURES to
+    /// a folder).
+    #[test]
+    fn capture_new_document_visual_fixtures() {
+        let Some(directory) = std::env::var_os("CRAFT_UI_VISUAL_FIXTURES").map(std::path::PathBuf::from) else {
+            return;
+        };
+        std::fs::create_dir_all(&directory).unwrap();
+        for brightness in crate::theme::Brightness::ALL {
+            let mut app = VectorcraftApp::new(Session::new(), Default::default());
+            app.run("file.newDialog", json!({})).unwrap();
+            set(&mut app, "category", json!("Mobile"));
+            set(&mut app, "preset", json!("Phone 393×852"));
+            let mut ready = false;
+            let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(1400.0, 1000.0)).wgpu().build_ui_state(
+                move |ui, app: &mut VectorcraftApp| {
+                    if !ready {
+                        crate::theme::install_fonts(ui.ctx());
+                        crate::theme::apply(ui.ctx(), brightness);
+                        ready = true;
+                        return;
+                    }
+                    crate::dialogs::show(app, ui.ctx());
+                },
+                app,
+            );
+            h.run_steps(4);
+            h.render().unwrap().save(directory.join(format!("vectorcraft-new-document-{brightness:?}.png"))).unwrap();
+        }
     }
 }

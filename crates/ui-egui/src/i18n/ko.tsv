@@ -4344,3 +4344,13 @@ lighting	Light	광원
 	Softness	부드러움
 	Ambient Light	주변광
 	Light behind the object	개체 뒤의 조명
+# New Document sheet (hero, categories).
+	New Document	새 문서
+	Start a new document	새 문서 시작하기
+	Pick a preset below, or set your own size in Preset Details.	아래에서 사전 설정을 선택하거나 사전 설정 세부 정보에서 크기를 직접 지정하세요.
+	Mobile	모바일
+	Web	웹
+	Film & Video	필름 및 비디오
+	Art & Illustration	아트 및 일러스트레이션
+	Branding	브랜딩
+	Social	소셜

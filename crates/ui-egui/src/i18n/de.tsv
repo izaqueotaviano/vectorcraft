@@ -4335,3 +4335,13 @@ theme	Appearance	Erscheinungsbild
 	Softness	Weichheit
 	Ambient Light	Umgebungslicht
 	Light behind the object	Licht hinter dem Objekt
+# New Document sheet (hero, categories).
+	New Document	Neues Dokument
+	Start a new document	Ein neues Dokument beginnen
+	Pick a preset below, or set your own size in Preset Details.	Wählen Sie unten eine Vorgabe oder legen Sie unter „Vorgabedetails“ eine eigene Größe fest.
+	Mobile	Mobilgeräte
+	Web	Web
+	Film & Video	Film und Video
+	Art & Illustration	Grafik und Illustration
+	Branding	Branding
+	Social	Social Media

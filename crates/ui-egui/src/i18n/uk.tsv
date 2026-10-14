@@ -4360,3 +4360,13 @@ lighting	Light	Світло
 	Softness	М'якість
 	Ambient Light	Навколишнє світло
 	Light behind the object	Світло позаду об'єкта
+# New Document sheet (hero, categories).
+	New Document	Новий документ
+	Start a new document	Створити новий документ
+	Pick a preset below, or set your own size in Preset Details.	Виберіть набір параметрів нижче або задайте власний розмір у розділі «Відомості про набір».
+	Mobile	Мобільні пристрої
+	Web	Веб
+	Film & Video	Кіно та відео
+	Art & Illustration	Графіка та ілюстрації
+	Branding	Фірмовий стиль
+	Social	Соцмережі

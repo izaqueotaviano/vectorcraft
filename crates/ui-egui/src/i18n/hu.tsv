@@ -4775,3 +4775,8 @@ imageTrace	Outline	Körvonal
 	Softness	Lágyság
 	Ambient Light	Környezeti fény
 	Light behind the object	Fény az objektum mögött
+# New Document sheet (hero, categories).
+	New Document	Új dokumentum
+	Start a new document	Új dokumentum kezdése
+	Pick a preset below, or set your own size in Preset Details.	Válasszon lent egy előbeállítást, vagy adjon meg saját méretet az Előbeállítás részletei között.
+	Web	Web

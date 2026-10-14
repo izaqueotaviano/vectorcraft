@@ -4376,3 +4376,13 @@ lighting	Light	Свет
 	Softness	Мягкость
 	Ambient Light	Окружающий свет
 	Light behind the object	Свет позади объекта
+# New Document sheet (hero, categories).
+	New Document	Новый документ
+	Start a new document	Создать новый документ
+	Pick a preset below, or set your own size in Preset Details.	Выберите набор параметров ниже или задайте свой размер в разделе «Сведения о наборе».
+	Mobile	Мобильные устройства
+	Web	Веб
+	Film & Video	Кино и видео
+	Art & Illustration	Графика и иллюстрации
+	Branding	Фирменный стиль
+	Social	Соцсети

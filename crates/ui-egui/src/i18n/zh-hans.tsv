@@ -3957,3 +3957,7 @@ lighting	Light	光源
 	Softness	柔和度
 	Ambient Light	环境光
 	Light behind the object	光源位于对象后方
+# New Document sheet (hero, categories).
+	New Document	新建文档
+	Start a new document	开始新文档
+	Pick a preset below, or set your own size in Preset Details.	在下方选择一个预设，或在“预设详细信息”中自行设置尺寸。
