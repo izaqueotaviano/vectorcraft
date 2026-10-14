@@ -250,7 +250,8 @@ fn category_label(name: &str) -> &str {
         "Recent" => tl!("Recent"),
         "Saved" => tl!("Saved"),
         "Mobile" => tl!("Mobile"),
-        "Web" => tl!("Web"),
+        // A name kept as it is in every language, like the Web menu items.
+        "Web" => "Web",
         "Print" => tl!("Print"),
         "Film & Video" => tl!("Film & Video"),
         "Art & Illustration" => tl!("Art & Illustration"),
@@ -1057,7 +1058,8 @@ mod tests {
         // A print preset is CMYK.
         set(&mut app, "category", json!("Print"));
         let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1400.0, 1000.0))), ..Default::default() };
-        let out = ctx.run_ui(raw, |ui| crate::dialogs::show(&mut app, ui.ctx()));
+        let mut out = ctx.run_ui(raw, |ui| crate::dialogs::show(&mut app, ui.ctx()));
+        out.textures_delta.clear();
         assert!(shapes(&out).0.iter().any(|(t, _)| t.ends_with("· CMYK")));
     }
 
