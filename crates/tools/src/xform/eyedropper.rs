@@ -50,7 +50,9 @@ fn paint_sample(n: &Node, on_stroke: bool, p: Point) -> Option<Color> {
     paint_color_at(paint, Some(bounds), p)
 }
 
-/// The colour of image `n`'s pixels at `p`, averaged over the raster sample size.
+/// The colour of image `n`'s pixels at `p`, averaged over the raster sample size, as it shows:
+/// pixels are drawn as sRGB while RGB colours show through the working RGB space, so the sample is
+/// expressed in the working space (unchanged while that is sRGB).
 fn image_color_at(cx: &ToolContext, n: &Node, p: Point) -> Option<Color> {
     let NodeKind::Image(im) = &n.kind else { return None };
     if im.xf.determinant().abs() < 1e-12 {
@@ -58,7 +60,13 @@ fn image_color_at(cx: &ToolContext, n: &Node, p: Point) -> Option<Color> {
     }
     let px = im.xf.inverse() * p;
     let [r, g, b, _] = cx.doc.images.get(&im.key)?.sample_object(px.x, px.y, (im.width, im.height), cx.raster_sample)?;
-    Some(Color::rgb8(r, g, b))
+    let srgb = Color::rgb8(r, g, b);
+    let cms = vectorcraft_color::cms::active();
+    if cms.rgb_is_srgb() {
+        return Some(srgb);
+    }
+    let [r, g, b] = cms.srgb_to_rgb(srgb.to_rgb_uncalibrated());
+    [r, g, b].iter().all(|v| v.is_finite()).then(|| Color::rgb(r.clamp(0.0, 1.0), g.clamp(0.0, 1.0), b.clamp(0.0, 1.0)))
 }
 
 impl Tool for EyedropperTool {

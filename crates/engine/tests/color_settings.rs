@@ -226,3 +226,51 @@ fn live_objects_draw_through_new_color_settings() {
         assert!(warm == fresh, "{what}: drawn as a new renderer draws it");
     }
 }
+
+/// The Eyedropper samples the colour shown (a user report: "the colour always comes out
+/// different"). Placed pixels show as they are (sRGB) while RGB colours show through the working
+/// RGB space, so with a working space other than sRGB, and in a CMYK document, the colour sampled
+/// from an image must be stored so that the filled object renders exactly as the pixel did.
+#[test]
+fn the_eyedropper_samples_the_colour_shown_through_the_working_spaces() {
+    use vectorcraft_doc::{ImageBlob, ImageObject, Node, NodeKind};
+    use vectorcraft_tools::{PointerEvent, PointerKind};
+    let _g = settings();
+    let old = cms::active_settings();
+    let pixels = [[0xe6u8, 0x7d, 0x30, 255], [0x22, 0x10, 0x05, 255]];
+    let img = image::RgbaImage::from_raw(2, 1, pixels.concat()).unwrap();
+    let mut png = vec![];
+    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    for (rgb, mode) in [(cms::SRGB, "cmyk"), (cms::DISPLAY_P3, "rgb"), (cms::PROPHOTO_RGB, "cmyk")] {
+        let mut s = Session::new();
+        exec(&mut s, "file.new", json!({"width": 400, "height": 300, "colorMode": mode}));
+        s.execute("edit.colorSettings", &json!({"rgb": rgb})).unwrap();
+        // The image, 100 pt per pixel at (200, 0); the target square at (20, 20).
+        let png = png.clone();
+        s.edit("Place", |d, _| {
+            d.images.insert("px".into(), ImageBlob::png(png));
+            let l = d.layers[0].id;
+            let id = d.alloc_id();
+            let xf = Affine::translate((200.0, 0.0)) * Affine::scale(100.0);
+            let im = ImageObject { key: "px".into(), width: 2, height: 1, xf, link: None, placement: Default::default() };
+            d.insert(Some(l), 0, Node::new(id, NodeKind::Image(Box::new(im)))).map_err(|e| vectorcraft_engine::EngineError::Other(e.to_string()))
+        })
+        .unwrap();
+        let dst = rect(&mut s, 20.0, 20.0, 60.0, 60.0);
+        exec(&mut s, "stroke.set", json!({"weight": 0}));
+        for (x, px) in [(250.0, pixels[0]), (350.0, pixels[1])] {
+            s.select_tool("eyedropper", Default::default()).unwrap();
+            s.pointer(&PointerEvent::new(PointerKind::Down, x, 50.0), Default::default()).unwrap();
+            let doc = &s.doc().unwrap().doc;
+            let c = doc.node(dst).unwrap().appearance.fill_paint().color().unwrap();
+            let want = format!("#{:02x}{:02x}{:02x}", px[0], px[1], px[2]);
+            assert_eq!(c.to_hex(), want, "{rgb}, {mode}: the sampled colour shows as the pixel ({c:?})");
+            let frame = Renderer::new().render(doc, 400, 300, Affine::IDENTITY, &RenderOptions::default());
+            // The renderer's image sampling may round a channel one level down (229 for 230).
+            let (fill, image) = (frame.pixel(50, 50), frame.pixel(x as u32, 50));
+            let off = fill.iter().zip(image).map(|(a, b)| a.abs_diff(b)).max().unwrap();
+            assert!(off <= 1, "{rgb}, {mode}: the filled square renders as the image ({fill:?} vs {image:?})");
+        }
+        cms::set_active(&old).unwrap();
+    }
+}

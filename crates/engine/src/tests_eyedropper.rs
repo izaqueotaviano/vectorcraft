@@ -173,6 +173,51 @@ fn clicking_an_image_samples_its_pixel() {
     assert_eq!(node(&s, dst).appearance.fill_paint().color(), Some(Color::rgb8(128, 128, 64)), "5 x 5 average of both pixels");
 }
 
+/// Place a `w`×1 image of `pixels` at (300, 0), 100 pt per pixel.
+fn place_pixels(s: &mut Session, pixels: &[[u8; 4]]) {
+    let img = image::RgbaImage::from_raw(pixels.len() as u32, 1, pixels.concat()).unwrap();
+    let mut png = vec![];
+    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    s.edit("Place", |d, _| {
+        d.images.insert("px".into(), ImageBlob::png(png));
+        let l = d.layers[0].id;
+        let id = d.alloc_id();
+        let xf = vectorcraft_geom::Affine::translate((300.0, 0.0)) * vectorcraft_geom::Affine::scale(100.0);
+        let im = ImageObject { key: "px".into(), width: pixels.len() as u32, height: 1, xf, link: None, placement: Default::default() };
+        d.insert(Some(l), 0, Node::new(id, NodeKind::Image(Box::new(im)))).map_err(|e| crate::EngineError::Other(e.to_string()))
+    })
+    .unwrap();
+}
+
+/// The user's report: in a CMYK document an image's orange (#e67d30) and dark brown (#221005)
+/// came out as #e38d38 and #462815, because the sampled RGB went through the profile-free RGB →
+/// CMYK formula and then showed through the working CMYK profile. A sampled colour keeps its
+/// model, so it shows exactly as the pixel it came from, whatever the document's colour mode.
+#[test]
+fn a_cmyk_document_samples_the_colour_shown() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 600, "colorMode": "cmyk"})).unwrap();
+    place_pixels(&mut s, &[[0xe6, 0x7d, 0x30, 255], [0x22, 0x10, 0x05, 255]]);
+    let dst = rect(&mut s, 10.0);
+    for (x, hex) in [(350.0, "#e67d30"), (450.0, "#221005")] {
+        click(&mut s, x, 50.0, Mods::default());
+        let c = node(&s, dst).appearance.fill_paint().color().unwrap();
+        assert_eq!((c, c.to_hex()), (Color::from_hex(hex).unwrap(), hex.to_string()), "image pixel {hex}");
+        assert_eq!(s.paint.fill.color().map(|c| c.to_hex()), Some(hex.to_string()), "the default fill too");
+    }
+    // An RGB fill in a CMYK document (kept with keepModel) samples as stored, Shift-click or not.
+    let src = rect(&mut s, 150.0);
+    s.execute("paint.setFill", &json!({"color": "#221005", "keepModel": true})).unwrap();
+    s.execute("select.set", &json!({"ids": [dst.0]})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#ffffff"})).unwrap();
+    click(&mut s, 175.0, 35.0, Mods { shift: true, ..Default::default() });
+    assert_eq!(node(&s, dst).appearance.fill_paint().color(), Some(Color::rgb8(0x22, 0x10, 0x05)));
+    let _ = src;
+    // So does the control-channel form.
+    s.execute("paint.sampleColor", &json!({"color": "#e67d30"})).unwrap();
+    assert_eq!(node(&s, dst).appearance.fill_paint().color(), Some(Color::rgb8(0xe6, 0x7d, 0x30)));
+}
+
 #[test]
 fn the_options_are_a_preference() {
     let mut s = Session::new();

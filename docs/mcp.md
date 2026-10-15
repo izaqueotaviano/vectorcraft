@@ -1288,7 +1288,8 @@ the source's fills and strokes on top of each target's stack (Shift+Alt-click). 
 `eyedropper.setOptions {sampleSize?, pickUp?, apply?}` (or `prefs.get`/`prefs.set` with key `eyedropper`) reads and
 sets them; a tree names flags under `appearance` (`transparency`, `fill` `{color, transparency, overprint}`, `stroke`
 `{color, transparency, overprint, weight, cap, join, miter, dash}`), `character` and `paragraph`, and a bool for a
-branch sets all of it. `paint.sampleColor {color}` puts a sampled colour (in its own model) into the active proxy.
+branch sets all of it. `paint.sampleColor {color}` puts a sampled colour (in its own model, also in a CMYK document, so it shows as sampled)
+into the active proxy.
 
 ```json
 {"name":"run_command","arguments":{"command":"eyedropper.setOptions","params":{"pickUp":{"appearance":{"stroke":{"weight":false}}}}}}

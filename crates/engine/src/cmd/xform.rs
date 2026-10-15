@@ -27,7 +27,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Sample Color",
             [],
             None,
-            "{color, stroke?: bool (default: whichever proxy is active), ids?, stop?: index} sample a colour into the active fill/stroke (and the selection); with `stop`, recolour that stop of the gradient behind the proxy instead (paint.editGradient)",
+            "{color, stroke?: bool (default: whichever proxy is active), ids?, stop?: index} sample a colour into the active fill/stroke (and the selection), keeping its model (an RGB colour stays RGB in a CMYK document, so it shows as sampled); with `stop`, recolour that stop of the gradient behind the proxy instead (paint.editGradient)",
             has_doc,
             sample_color
         ),
@@ -342,7 +342,9 @@ fn sample_color(s: &mut Session, p: &Value) -> Result<Value> {
     let stroke = p.get("stroke").and_then(Value::as_bool).unwrap_or(!s.fill_active);
     let c = p.get("color").ok_or_else(|| bad(C, "missing color"))?;
     let (id, mut q) = match p.get("stop") {
-        None | Some(Value::Null) => (if stroke { "paint.setStroke" } else { "paint.setFill" }, json!({ "color": c })),
+        // The colour keeps its model, in a CMYK document too: a sampled RGB colour converted to
+        // CMYK would show through the CMYK profile, not as it showed where it was sampled.
+        None | Some(Value::Null) => (if stroke { "paint.setStroke" } else { "paint.setFill" }, json!({ "color": c, "keepModel": true })),
         Some(v) => {
             let i = v.as_u64().ok_or_else(|| bad(C, "`stop` must be a stop index"))? as usize;
             let color = color_value(c).ok_or_else(|| bad(C, format!("bad color {c}")))?;
